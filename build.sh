@@ -1,10 +1,20 @@
 #!/bin/bash -e
 
+###############################################################
+# This must be executed from the directory with the resources #
+###############################################################
+
 set -e
 set -o pipefail
 
 function set_version_vars {
+  # if TAG_NAME is given as env var and it ends with -centos7,
+  # extract the version from it, assuming it is M.N.P format.
   export RN_VERSION=`jq -r .version package.json`
+  if [ "$TAG_NAME" != "${TAG_NAME%-centos7}"]
+  then
+    RN_VERSION="${TAG_NAME%-centos7}"
+  fi
   export RN_VERSION_U=`echo $RN_VERSION | tr . _`
   export RN_VERSION_MAJOR=`echo $RN_VERSION | cut -d. -f1`
   export RN_VERSION_MINOR=`echo $RN_VERSION | cut -d. -f2`
@@ -15,6 +25,11 @@ export NUM_PROCESSORS=$( getconf _NPROCESSORS_ONLN )
 
 # Note that CMakeLists.txt assumes that all the resources are in /shared.
 # Therefore, it is recommend to link the dir with all the resources to /shared
+if [ "$PWD" != '/shared' ] && [ ! -d '/shared' ]
+then
+  ln -s $PWD /shared
+fi
+
 export SOURCE_DIR=/shared
 BUILD_DIR=/root/build
 rm -rf ${BUILD_DIR}
@@ -41,9 +56,12 @@ export LIBRARY_PATH=$INSTALL_DIR/lib:/opt/local/lib64
 export PKG_CONFIG_PATH=/opt/local/lib64/pkgconfig:/opt/local/lib/pkgconfig:/usr/local/lib64/pkgconfig:/usr/local/lib/pkgconfig
 export LD_LIBRARY_PATH=/opt/local/lib64:/opt/local/lib:/usr/local/lib64:/usr/local/lib
 
-
-cmake -DCMAKE_INSTALL_PREFIX:PATH=${INSTALL_DIR}       -DCMAKE_BUILD_TYPE:STRING=RELEASE       -DCPACK_PACKAGE_VERSION=${RN_VERSION}       -DCPACK_GENERATOR=RPM       -DRPM_INSTALL_DIR=/opt/local      ${SOURCE_DIR}/.
-
+cmake -DCMAKE_INSTALL_PREFIX:PATH=${INSTALL_DIR} \
+  -DCMAKE_BUILD_TYPE:STRING=RELEASE  \
+  -DCPACK_PACKAGE_VERSION=${RN_VERSION} \
+  -DCPACK_GENERATOR=RPM \
+  -DRPM_INSTALL_DIR=/opt/local \
+  ${SOURCE_DIR}/.
 
 make package
 
